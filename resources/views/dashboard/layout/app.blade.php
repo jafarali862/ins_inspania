@@ -56,7 +56,7 @@ $user = Auth::user();
 
    
     <!-- Dashboard Page js -->
-    <script src="assets/js/pages/dashboard.js"></script>
+    <script src="assets/js/pages/dashboard-2.js"></script>
     @endpush
 
 
