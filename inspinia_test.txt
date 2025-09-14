@@ -1,0 +1,553 @@
+  public function dashboard()
+{
+    $totalEmployee    = User::where('role', '!=', 1)->count();
+    $totalCompany     = InsuranceCompany::count();
+    $totalCase        = InsuranceCase::count();
+    $completeCase     = InsuranceCase::where('status', 0)->count();
+    $pendingCase      = InsuranceCase::where('status', 1)->count();
+    $assignedCase     = InsuranceCase::where('case_status', 2)->count();
+    $fakeCase         = CaseAssignment::where('is_fake', 1)->count();
+    $totalSubmittedCase = InsuranceCase::where('case_status', 0)->count();
+
+    $currentYear = Carbon::now()->year;
+
+    $totalcaseCount = DB::table('insurance_customers')
+        ->leftJoin('insurance_cases', 'insurance_customers.id', '=', 'insurance_cases.customer_id')
+        ->leftJoin('insurance_companies', 'insurance_companies.id', '=', 'insurance_customers.company_id')
+        ->count();
+
+    $data = InsuranceCase::selectRaw('MONTH(created_at) as month, COUNT(*) as case_count')
+        ->whereYear('created_at', $currentYear)
+        ->groupBy('month')
+        ->orderBy('month')
+        ->get();
+
+    $casesCount = array_fill(0, 12, 0);
+    foreach ($data as $item) {
+        $casesCount[$item->month - 1] = $item->case_count;
+    }
+
+    return view('dashboard.index')->with([
+        'totalEmployee'      => $totalEmployee,
+        'totalCompany'       => $totalCompany,
+        'totalCase'          => $totalCase,
+        'completeCase'       => $completeCase,
+        'pendingCase'        => $pendingCase,
+        'casesCount'         => $casesCount,
+        'currentYear'        => $currentYear,
+        'assignedCase'       => $assignedCase,
+        'fakeCase'           => $fakeCase,
+        'totalSubmittedCase' => $totalSubmittedCase,
+        // 'totalcaseCount'     => $totalcaseCount,
+    ]);
+}
+
+
+public function dashboard_filter(Request $request)
+{
+    $filter = $request->get('filter', 'all');
+    $from   = $request->get('from');
+    $to     = $request->get('to');
+
+    if ($from && $to) {
+        $start = Carbon::parse($from)->startOfDay();
+        $end   = Carbon::parse($to)->endOfDay();
+    } elseif ($filter === 'daily') {
+        $start = Carbon::today();
+        $end   = Carbon::today()->endOfDay();
+    } elseif ($filter === 'weekly') {
+        $start = Carbon::now()->startOfWeek();
+        $end   = Carbon::now()->endOfWeek();
+    } elseif ($filter === 'monthly') {
+        $start = Carbon::now()->startOfMonth();
+        $end   = Carbon::now()->endOfMonth();
+    } else {
+        $start = $end = null;
+    }
+
+    $totalEmployee = User::where('role', '!=', 1)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))
+        ->count();
+
+    $totalCompany = InsuranceCompany::when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $totalCase = InsuranceCase::when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $completeCase = InsuranceCase::where('status', 0)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $pendingCase = InsuranceCase::where('status', 1)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $assignedCase = InsuranceCase::where('case_status', 2)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $fakeCase = CaseAssignment::where('is_fake', 1)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+    $totalSubmittedCase = InsuranceCase::where('case_status', 0)
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))->count();
+
+    $currentYear = Carbon::now()->year;
+    $caseData = InsuranceCase::selectRaw('MONTH(created_at) as month, COUNT(*) as case_count')
+        ->when($start && $end, fn($q) => $q->whereBetween('created_at', [$start, $end]))
+        ->whereYear('created_at', $currentYear)
+        ->groupBy('month')
+        ->orderBy('month')
+        ->get();
+
+    $casesCount = array_fill(0, 12, 0);
+    foreach ($caseData as $item) $casesCount[$item->month - 1] = $item->case_count;
+
+    return response()->json([
+        'totalEmployee' => $totalEmployee,
+        'totalCompany' => $totalCompany,
+        'totalCase' => $totalCase,
+        'completeCase' => $completeCase,
+        'pendingCase' => $pendingCase,
+        'assignedCase' => $assignedCase,
+        'fakeCase' => $fakeCase,
+        'totalSubmittedCase' => $totalSubmittedCase,
+        'casesCount' => $casesCount
+    ]);
+}
+
+
+Route::get('/dashboard/filter', [AuthController::class, 'dashboard_filter'])->name('dashboard.filter');
+
+public/assets/plugins/datatbles/repsonsive.bootstrap5.min
+
+
+
+
+
+@extends('dashboard.layout.app')
+
+@section('title', 'Dashboard')
+
+@section('content')
+  
+@php
+    $user = Auth::user();
+@endphp
+
+
+
+
+
+      <div class="content-page">
+            <div class="container-fluid">
+                
+                <div class="page-title-head d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h4 class="fs-sm text-uppercase fw-bold m-0">Dashboard</h4>
+                    </div>
+
+                    <!-- <div class="text-end">
+                        <ol class="breadcrumb m-0 py-0">
+                            <li class="breadcrumb-item"><a href="javascript: void(0);">Inspinia</a></li>
+                            
+                            <li class="breadcrumb-item active">Dashboard 2</li>
+                        </ol>
+                    </div> -->
+                </div>
+
+
+             <!-- <div class="mb-3">
+    <label for="filterRange" class="form-label fw-bold">Filter By:</label>
+    <select id="filterRange" class="form-select" style="width: 200px;">
+        <option value="all" selected>All</option>
+        <option value="daily">Today</option>
+        <option value="weekly">This Week</option>
+        <option value="monthly">This Month</option>
+    </select>
+</div> -->
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label for="filterRange" class="form-label fw-bold">Filter By:</label>
+        <select id="filterRange" class="form-select">
+            <option value="all" selected>All</option>
+            <option value="daily">Today</option>
+            <option value="weekly">This Week</option>
+            <option value="monthly">This Month</option>
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <label for="fromDate" class="form-label fw-bold">From Date:</label>
+        <input type="date" id="fromDate" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+        <label for="toDate" class="form-label fw-bold">To Date:</label>
+        <input type="date" id="toDate" class="form-control">
+    </div>
+</div>
+
+
+
+
+                <div class="row row-cols-xxl-4 row-cols-md-2 row-cols-1">
+                    <!-- Total Sales Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Insurance Companies</h5>
+                                <!-- <span class="badge badge-soft-success"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <h3 class="mb-2 fw-normal total-company">{{ $totalCompany }}</h3>
+                                         <a href="{{ route('company.list') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- Total Orders Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Total Employees</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal total-employee"> {{ $totalEmployee }}</h3>
+                                                 <a href="{{ route('user.list') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- New Customers Widget -->
+                     <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Total Cases</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal total-case">{{$totalCase}}</h3>
+                                        <a href="{{ route('case.index') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- Monthly Revenue Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Complete Investigations</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal complete-case">{{ $completeCase }}</h3>
+                                        <!-- <a href="{{ route('case.index') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a> -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+
+                </div><!-- end row -->
+
+
+
+
+        <div class="row row-cols-xxl-4 row-cols-md-2 row-cols-1">
+                    <!-- Total Sales Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Assigned Cases</h5>
+                                <!-- <span class="badge badge-soft-success"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <h3 class="mb-2 fw-normal assigned-case">{{ $assignedCase }}</h3>
+                                         <a href="{{ route('assigned.case') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- Total Orders Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Submitted Cases</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal submitted-case"> {{ $totalSubmittedCase }}</h3>
+                                                 <a href="{{ route('assigned.case') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- New Customers Widget -->
+                     <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Fake Cases</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal fake-case">{{ $fakeCase }}</h3>
+                                        <a href="{{ route('fake.cases') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+                    <!-- Monthly Revenue Widget -->
+                    <div class="col">
+                        <div class="card" style="border-color: #c7c7c7;">
+                            <div class="card-header d-flex border-dashed justify-content-between align-items-center">
+                                <h5 class="card-title">Pending Cases</h5>
+                                <!-- <span class="badge badge-soft-primary"> Monthly</span> -->
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="donut-chart" data-chart="donut" style="min-height: 60px; width: 60px;"></div>
+                                    <div class="text-end">
+                                        <!-- <h3 class="mb-2 fw-normal"><span data-target="280">0</span></h3> -->
+                                        <h3 class="mb-2 fw-normal pending-case">{{ $pendingCase }}</h3>
+                                        <a href="{{ route('case.today') }}" ><p class="mb-0 text-muted"><span>More info</span></p></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end col -->
+
+
+                </div><!-- end row -->
+
+
+    <div class="row">
+
+    <div class="col-md-8">
+    <div class="ibox">
+    <div class="ibox-title">
+    <h5><i class="fa fa-area-chart"></i> Total Cases for {{ $currentYear }}</h5>
+    </div>
+    <div class="ibox-content">
+    <div id="basic-area" class="apex-charts" style="min-height: 395px; width: 100%;"></div>
+    </div>
+    </div>
+
+    </div>
+
+    <div class="col-md-4">
+    <div class="card card-success card-outline">
+    <div class="card-header">
+    <h3 class="card-title">
+    <i class="fas fa-chart-pie"></i> Total Case Status
+    </h3>
+    </div>
+    <div class="card-body">
+    <!-- Apex Pie Chart Container -->
+    <div id="simple-pie" style="min-height: 320px;"></div>
+
+    <!-- Custom Legend Badges -->
+    <div class="text-center mt-3">
+    <span class="badge bg-success me-2" style="font-size: 14px;">
+    <i class="fas fa-circle me-1"></i> Complete: <strong>{{ $completeCase }}</strong>
+    </span>
+    <span class="badge bg-danger" style="font-size: 14px;">
+    <i class="fas fa-circle me-1"></i> Pending: <strong>{{ $pendingCase }}</strong>
+    </span>
+    </div>
+    </div>
+    </div>
+    </div>
+
+
+
+    </div>
+
+    </div>
+    <!-- container -->
+    <!-- Footer Start -->
+    <footer class="footer">
+    <div class="container-fluid">
+    <div class="row">
+    <div class="col-md-6 text-center text-md-start">
+    ©  <script>document.write(new Date().getFullYear())</script> Copyright  <span class="fw-semibold">Niveosys Technologies Pvt Ltd</span> 
+    </div>
+    <div class="col-md-6">
+    <!-- <div class="text-md-end d-none d-md-block">         
+
+    10GB of <span class="fw-bold">250GB</span> Free.
+    </div> -->
+    </div>
+    </div>
+    </div>
+    </footer>
+    <!-- end Footer -->
+
+    </div>
+
+
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+
+
+
+
+
+
+<script>
+let areaChart, pieChart;
+
+document.addEventListener('DOMContentLoaded', function () {
+    const filterEl = document.getElementById('filterRange');
+    const fromDateEl = document.getElementById('fromDate');
+    const toDateEl = document.getElementById('toDate');
+
+    const mapping = {
+        totalEmployee: '.total-employee',
+        totalCompany: '.total-company',
+        totalCase: '.total-case',
+        completeCase: '.complete-case',
+        pendingCase: '.pending-case',
+        assignedCase: '.assigned-case',
+        fakeCase: '.fake-case',
+        totalSubmittedCase: '.submitted-case',
+    };
+
+    function updateCounts(data) {
+        Object.entries(mapping).forEach(([key, selector]) => {
+            const el = document.querySelector(selector);
+            if (el && data[key] !== undefined) el.innerText = data[key];
+        });
+    }
+
+    function updateCharts(data) {
+        if (areaChart) {
+            areaChart.updateSeries([{ name: 'Total Cases', data: data.casesCount }]);
+        }
+        if (pieChart) {
+            pieChart.updateSeries([data.completeCase, data.pendingCase]);
+        }
+    }
+
+    async function fetchCounts(filter, from = null, to = null) {
+        try {
+            const baseUrl = @json(route('dashboard.filter'));
+            let url = `${baseUrl}?filter=${filter}`;
+            if (from && to) url += `&from=${from}&to=${to}`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            const data = await res.json();
+
+            // Init charts on first load
+            if (!areaChart && !pieChart) {
+                areaChart = new ApexCharts(document.querySelector("#basic-area"), {
+                    chart: { type: 'area', height: 380, toolbar: { show: false } },
+                    colors: ['#1ab394'],
+                    dataLabels: { enabled: false },
+                    stroke: { curve: 'straight', width: 2 },
+                    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0 } },
+                    series: [{ name: 'Total Cases', data: data.casesCount }],
+                    xaxis: { categories: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] }
+                });
+                areaChart.render();
+
+                pieChart = new ApexCharts(document.querySelector("#simple-pie"), {
+                    chart: { type: 'donut', height: 320 },
+                    series: [data.completeCase, data.pendingCase],
+                    labels: ['Complete', 'Pending'],
+                    colors: ['#1ab394', '#ed5565'],
+                    stroke: { colors: ['#ffffff'], width: 2 },
+                    dataLabels: { enabled: true, style: { fontSize: '14px', fontWeight: '600', colors: ['#ffffff'] } },
+                    plotOptions: { pie: { donut: { size: '70%', labels: { show: false } } } },
+                    legend: { show: true, position: 'bottom', fontSize: '13px', fontWeight: 600 }
+                });
+                pieChart.render();
+            } else {
+                updateCharts(data);
+            }
+
+            updateCounts(data);
+        } catch (e) {
+            console.error('Error fetching filter data', e);
+        }
+    }
+
+    // Trigger fetch when dropdown changes
+    filterEl.addEventListener('change', function () {
+        const from = fromDateEl.value || null;
+        const to = toDateEl.value || null;
+        fetchCounts(this.value, from, to);
+    });
+
+    // Trigger fetch when From/To dates change
+    fromDateEl.addEventListener('change', () => {
+        const from = fromDateEl.value;
+        const to = toDateEl.value;
+        if (from && to) fetchCounts(filterEl.value, from, to);
+    });
+
+    toDateEl.addEventListener('change', () => {
+        const from = fromDateEl.value;
+        const to = toDateEl.value;
+        if (from && to) fetchCounts(filterEl.value, from, to);
+    });
+
+    // Default load
+    fetchCounts(filterEl.value || 'all', fromDateEl.value || null, toDateEl.value || null);
+});
+</script>
+
+
+@endsection
+ 
+<style>
+@media (max-width: 576px) {
+    /* Hide only the Action column header */
+    #templatesTable th:nth-child(3) {
+        display: none !important;
+    }
+
+    /* Hide only the "Action" title in responsive child rows, keep the data visible */
+    li[data-dtr-index="3"] > span.dtr-title {
+        display: none !important;
+    }
+}
+
+
+
+</style>
